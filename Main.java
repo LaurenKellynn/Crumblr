@@ -27,14 +27,23 @@ public class Main {
      */
     public static void main(String[] args) throws IOException {
 
-        //Path to choose the file from the user. If the file doesn't exist, we will create one.
+             //Path to choose the file from the user. If the file doesn't exist, we will create one.
         Scanner userFile = new Scanner(System.in);
-        System.out.println("Please enter the full path to the text file.");
-        System.out.println("If the file does not exist, we will create one for you.");
-        System.out.print("File path: ");
-        Path menuItemFile = Path.of(userFile.nextLine());
-        if (!Files.exists(menuItemFile)) {
-            Files.createFile(menuItemFile);
+        Path menuItemFile = null;
+
+        while (menuItemFile == null){
+            System.out.println("Please enter the full path to the text file.");
+            System.out.println("If the file does not exist, we will create one for you.");
+            System.out.print("File path: ");
+
+            try {
+                menuItemFile = Path.of(userFile.nextLine());
+                if (!Files.exists(menuItemFile)) {
+                    Files.createFile(menuItemFile);
+                }
+            } catch (Exception e){
+                System.out.println("Invalid file path.");
+            }
         }
 
         CrumblrApp begin = new CrumblrApp(menuItemFile);
