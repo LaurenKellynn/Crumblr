@@ -27,7 +27,7 @@ public class Main {
      */
     public static void main(String[] args) throws IOException {
 
-             //Path to choose the file from the user. If the file doesn't exist, we will create one.
+        //Path to choose the file from the user. If the file doesn't exist, we will create one.
         Scanner userFile = new Scanner(System.in);
         Path menuItemFile = null;
 
@@ -76,5 +76,4 @@ public class Main {
             }
         }
     }
-
 }

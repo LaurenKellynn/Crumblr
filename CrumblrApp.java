@@ -32,7 +32,8 @@ public class CrumblrApp {
      * to the collection.
      */
     public void addMenuItemManually(Scanner userInput) throws IOException {
-        String newMenuEntry = createMenuItem(userInput) + System.lineSeparator();
+        int id = generateID();
+        String newMenuEntry = System.lineSeparator() + id + "/" + createMenuItem(userInput);
         Files.writeString(menuItemFile, newMenuEntry, StandardOpenOption.APPEND);
     }
 
@@ -120,6 +121,7 @@ public class CrumblrApp {
         //Custom action to calculate the expiration date
         LocalDate calculateExpirationDate = date.plusDays(life);
         expirationDate = calculateExpirationDate.format(formatter);
+        System.out.println("The expiration date for " + itemDescription + " has been automatically calculated and entered as: " + expirationDate);
 
         while (true) {
             System.out.println("Please enter the menu item's known allergies. If none, please enter 'None': ");
@@ -156,15 +158,15 @@ public class CrumblrApp {
         String listCollection = Files.readString(menuItemFile);
         String[] menuCollection = listCollection.split(System.lineSeparator());
 
-        String description;
+        String id;
         boolean found = false;
 
         //while loop to continue until user input is valid
         while (!found) {
-            System.out.println("Please type the menu item that you'd like to have removed: ");
-            description = userInput.nextLine();
+            System.out.println("Please type the ID of the menu item that you'd like to have removed: ");
+            id = userInput.nextLine();
 
-            if (description.isEmpty()) {
+            if (id.isEmpty()) {
                 System.out.println("Invalid entry. Please type the menu item that you'd like to have removed.");
                 continue;
             }
@@ -174,13 +176,13 @@ public class CrumblrApp {
                 if (menuCollection[i].isBlank()) continue;
                 //Splitting so the user only needs to enter the description before / and not whole line.
                 String[] fields = menuCollection[i].split("/");
-                if (fields[0].equalsIgnoreCase(description)) {
+                if (fields[0].equals(id)) {
                     menuCollection[i] = "";
                     found = true;
                 }
             }
             if (found) {
-                System.out.println(description + " deleted successfully!");
+                System.out.println("Menu item deleted successfully!");
             } else {
                 System.out.println("Menu item not found.");
             }
@@ -230,37 +232,160 @@ public class CrumblrApp {
     }
 
     /**
+     * method: generateID
+     * parameters: none
+     * return: int
+     * purpose: To add a unique id to each menu item entry
+     */
+    private int generateID() throws IOException {
+        if (!Files.exists(menuItemFile)) return 1;
+
+        int id = 0;
+
+        for (String line : Files.readAllLines(menuItemFile)){
+            if (line.isBlank()) continue;
+
+            String [] fields = line.split("/");
+            int itemId = Integer.parseInt(fields[0]);
+
+            if (itemId > id){
+                id = itemId;
+            }
+        }
+        return id + 1;
+    }
+
+    /**
      * method: updateMenuItem
      * parameters: Scanner for user input
      * return: none
-     * purpose: To have the user enter the description of the menu item they want to edit,
-     * Find that item in the list, call the createMenuItem method and rebuild the collection
-     * with the edit.
+     * purpose: To have the user enter the ID of the menu item they want to edit,
+     * Find that item in the list, and prompts the user on which attribute they'd
+     * like to edit.
      */
     public void updateMenuItem(Scanner userInput) throws IOException {
 
-        String listCollection = Files.readString(menuItemFile);
-        String[] menuCollection = listCollection.split(System.lineSeparator());
+        String[] menuCollection = Files.readString(menuItemFile).split(System.lineSeparator());
 
         boolean found = false;
 
         while (!found) {
-            System.out.println("Please type in the description of the menu item you would like to edit: ");
-            String description = userInput.nextLine();
+            System.out.println("Please type the ID of the menu item you would like to edit: ");
+            String id = userInput.nextLine();
 
-            if (description.isEmpty()) {
-                System.out.println("Invalid entry. Please type in the description of the menu item you would like to edit.");
-                continue;
-            }
             for (int i = 0; i < menuCollection.length; i++) {
                 if (menuCollection[i].isBlank()) continue;
                 //Splitting so the user only needs to enter the description before / and not whole line.
                 String[] fields = menuCollection[i].split("/");
-                if (fields[0].equalsIgnoreCase(description)) {
-                    System.out.println("Updating menu item: " + description);
+                if (fields[0].equals(id)) {
+                    System.out.println("Updating menu item: " + fields[1]);
+                    System.out.println("1. Description");
+                    System.out.println("2. Quantity");
+                    System.out.println("3. Date Made");
+                    System.out.println("4. Shelf Life");
+                    System.out.println("5. Allergens");
                     System.out.println();
-                    String updatedItem = createMenuItem(userInput);
-                    menuCollection[i] = updatedItem;
+
+                    String userChoice = userInput.nextLine();
+
+                    switch (userChoice) {
+                        case "1":
+                            while (true) {
+                                System.out.println("Please enter the item's new description: ");
+                                String description = userInput.nextLine();
+
+                                if (description.isEmpty() || description.length() > 30) {
+                                    System.out.println("Invalid entry. The menu item's description must be between 1 - 30 characters long.");
+                                } else {
+                                    fields[1] = description;
+                                    break;
+                                }
+                            }
+                            break;
+                        case "2":
+                            while (true) {
+                                System.out.println("Please enter the item's new quantity: ");
+                                String quantityInput = userInput.nextLine();
+
+                                try {
+                                    int quantity = Integer.parseInt(quantityInput);
+
+                                    if (quantity < 0 || quantity > 999) {
+                                        System.out.println("Invalid entry. Quantity must be between 0–999.");
+                                    } else {
+                                        fields[2] = quantityInput;
+                                        break;
+                                    }
+
+                                } catch (NumberFormatException e) {
+                                    System.out.println("Invalid entry. Quantity must be a number.");
+                                }
+                            }
+                            break;
+                        case "3":
+                            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy");
+
+                            while (true) {
+                                System.out.println("Please enter the item's new 'date made' (MM-DD-YYYY): ");
+                                String dateInput = userInput.nextLine();
+
+                                try {
+                                    LocalDate.parse(dateInput, formatter);
+                                    fields[3] = dateInput;
+                                    break;
+                                } catch (DateTimeParseException e) {
+                                    System.out.println("Invalid entry. Please use MM-DD-YYYY format.");
+                                }
+                            }
+                            break;
+
+                        case "4":
+                            while (true) {
+                                System.out.println("Please enter the new shelf life of the item: ");
+                                String shelfInput = userInput.nextLine();
+
+                                try {
+                                    int life = Integer.parseInt(shelfInput);
+
+                                    if (life < 1 || life > 99) {
+                                        System.out.println("Invalid entry. Shelf life must be between 1–99 days.");
+                                    } else {
+                                        fields[4] = shelfInput;
+                                        break;
+                                    }
+
+                                } catch (NumberFormatException e) {
+                                    System.out.println("Invalid entry. Shelf life must be a number.");
+                                }
+                            }
+                            break;
+
+                        case "5":
+                            while (true) {
+                                System.out.println("Please enter the new list of allergens: ");
+                                String allergens = userInput.nextLine();
+
+                                if (allergens.isEmpty() || allergens.length() > 500) {
+                                    System.out.println("Invalid entry. Must be between 1–500 characters.");
+                                } else {
+                                    fields[6] = allergens;
+                                    break;
+                                }
+                            }
+                            break;
+
+                        default:
+                            System.out.println("Please choose option 1, 2, 3, 4, or 5: ");
+                            return;
+                    }
+
+                    //Updating the expiration date if the date made or the shelf life changes.
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy");
+                    LocalDate dateMade = LocalDate.parse(fields[3], formatter);
+                    int shelfLife = Integer.parseInt(fields[4]);
+                    fields[5] = dateMade.plusDays(shelfLife).format(formatter);
+
+                    menuCollection[i] = String.join("/", fields);
                     found = true;
                     System.out.println("Menu item updated successfully!");
                     break;
@@ -271,10 +396,6 @@ public class CrumblrApp {
             }
         }
         //Rebuilding the file
-        StringBuilder newCollection = new StringBuilder();
-        for (String s : menuCollection) {
-            newCollection.append(s).append(System.lineSeparator());
-        }
-        Files.writeString(menuItemFile, newCollection.toString());
+        Files.writeString(menuItemFile, String.join(System.lineSeparator(), menuCollection));
     }
 }
