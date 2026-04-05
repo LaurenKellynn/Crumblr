@@ -1,3 +1,4 @@
+import javax.imageio.ImageIO;
 import javax.swing.*;
 import javax.swing.text.FlowView;
 import java.awt.*;
@@ -5,6 +6,7 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.nio.file.Files;
+import java.sql.Connection;
 
 /**
  * Lars Kellynn
@@ -28,32 +30,47 @@ public class GUI extends JFrame {
         setLocationRelativeTo(null);
 
         //Custom Icon
-        URL iconURL = getClass().getResource("/CupcakeIcon.png");
-        if (iconURL != null){
-            icon = new ImageIcon(iconURL);
-            Image image = icon.getImage();
-            setIconImage(image);
-            if (Taskbar.isTaskbarSupported()) {
-                Taskbar.getTaskbar().setIconImage(image);
+        try (var is = getClass().getResourceAsStream("/CupcakeIcon.png")) {
+            if (is != null) {
+                Image image = ImageIO.read(is);
+                this.icon = new ImageIcon(image);
+                setIconImage(image);
+                if (Taskbar.isTaskbarSupported()) {
+                    Taskbar.getTaskbar().setIconImage(image);
+                }
+            } else {
+                System.out.println("Icon not found");
             }
-        } else {
-            System.out.println("Icon not found");
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
-        //For the user to choose the file path
-        JFileChooser chooser = new JFileChooser();
-        chooser.setDialogTitle("Please select the file that holds the current menu");
-        chooser.setFileFilter(new javax.swing.filechooser.FileNameExtensionFilter("Text Files", "txt"));
+        JTextField urlField = new JTextField("jdbc:mysql://localhost:3306/Crumblr");
+        JTextField userField = new JTextField();
+        JPasswordField passField = new JPasswordField();
 
-        int result = chooser.showOpenDialog(this);
-        if (result == JFileChooser.APPROVE_OPTION) {
-            File file = chooser.getSelectedFile();
+        Object[] message = {
+                "Database URL:", urlField,
+                "Username:", userField,
+                "Password:", passField
+        };
+
+        int option = JOptionPane.showConfirmDialog(
+                this,
+                message,
+                "Connect to Database",
+                JOptionPane.OK_CANCEL_OPTION
+        );
+
+        if (option == JOptionPane.OK_OPTION) {
             try {
-                //Validate the file is a .txt file
-                CrumblrApp.validateTxtFile(file.toPath());
-                app = new CrumblrApp(file.toPath());
-            } catch (IllegalArgumentException ex){
-                JOptionPane.showMessageDialog(this, ex.getMessage());
+                app = new CrumblrApp(
+                        urlField.getText(),
+                        userField.getText(),
+                        new String(passField.getPassword())
+                );
+            } catch (Exception ex) {
+                JOptionPane.showMessageDialog(this, "Database connection failed: " + ex.getMessage());
                 System.exit(0);
             }
         } else {
@@ -113,22 +130,22 @@ public class GUI extends JFrame {
             JTextField shelfLife = new JTextField();
             JTextField allergens = new JTextField();
 
-            Object[] message = {
+            Object[] addItemMessage = {
                     "Menu Item's Description:", itemDescription,
                     "Menu Item's Quantity:", itemQuantity,
                     "Date that the Menu Item was made:", dateMade,
                     "Shelf life (in days) of the Menu Item:", shelfLife,
                     "Known allergens:", allergens
             };
-            int option = JOptionPane.showConfirmDialog(
+            int addItemOption = JOptionPane.showConfirmDialog(
                     this,
-                    message,
+                    addItemMessage,
                     "Add New Item",
                     JOptionPane.OK_CANCEL_OPTION,
                     JOptionPane.PLAIN_MESSAGE,
                     icon);
             setIconImage(icon.getImage());
-            if (option == JOptionPane.OK_OPTION){
+            if (addItemOption == JOptionPane.OK_OPTION){
                 try {
 
                     String expirationDate = app.addMenuItem(itemDescription.getText(),
@@ -195,30 +212,37 @@ public class GUI extends JFrame {
                 return;
             }
 
-            String field = (String) JOptionPane.showInputDialog(
-                    this,
-                    "Select field to update:\n" +
-                            "1: The menu item's description.\n" +
-                            "2: The menu item's quantity\n" +
-                            "3. The date the menu item was made\n" +
-                            "4. The shelf life of the menu item.\n" +
-                            "5. The list of allergens for the menu item",
-                    "Crumblr",
-                    JOptionPane.PLAIN_MESSAGE,
-                    icon,
-                    null,
-                    null
-            );
-            if (field == null) return;
+            String[] fields = {"Description", "Quantity", "Date Made", "Shelf Life", "Allergens"};
+            JComboBox<String> comboBox = new JComboBox<>(fields);
 
-            if (!field.matches("[1-5]")) {
-                JOptionPane.showMessageDialog(this, "Please choose options 1-5.");
-                return;
+            int updateOption = JOptionPane.showConfirmDialog(
+                    this,
+                    comboBox,
+                    "Select field to update",
+                    JOptionPane.OK_CANCEL_OPTION,
+                    JOptionPane.PLAIN_MESSAGE,
+                    icon
+            );
+            if (updateOption != JOptionPane.OK_OPTION) return;
+
+            String field = (String) comboBox.getSelectedItem();
+            String fieldCode;
+
+            switch (field) {
+                case "Description" -> fieldCode = "1";
+                case "Quantity" -> fieldCode = "2";
+                case "Date Made" -> fieldCode = "3";
+                case "Shelf Life" -> fieldCode = "4";
+                case "Allergens" -> fieldCode = "5";
+                default -> {
+                    JOptionPane.showMessageDialog(this, "Invalid selection.");
+                    return;
+                }
             }
 
             String newValue = (String) JOptionPane.showInputDialog(
                     this,
-                    "Enter the new value for this field:",
+                    "Enter the new value for " + field + ":",
                     "Crumblr",
                     JOptionPane.PLAIN_MESSAGE,
                     icon,
@@ -228,12 +252,12 @@ public class GUI extends JFrame {
 
             newValue = newValue.trim();
 
-            if (field.equals("2") && !newValue.matches("\\d+")) {
+            if (field.equals("Quantity") && !newValue.matches("\\d+")) {
                 JOptionPane.showMessageDialog(this, "Invalid entry. Quantity must be between 0–999.");
                 return;
             }
 
-            if (field.equals("3")) {
+            if (field.equals("Date Made")) {
                 try {
                     java.time.format.DateTimeFormatter formatter =
                             java.time.format.DateTimeFormatter.ofPattern("MM-dd-yyyy");
@@ -244,34 +268,47 @@ public class GUI extends JFrame {
                 }
             }
 
-            if (field.equals("4") && !newValue.matches("\\d+")) {
+            if (field.equals("Shelf Life") && !newValue.matches("\\d+")) {
                 JOptionPane.showMessageDialog(this, "Invalid entry. Shelf life must be between 1–99 days.");
                 return;
             }
-
             try {
-               app.updateMenuItem(id, field, newValue);
-            } catch (IOException ex) {
+               app.updateMenuItem(id, fieldCode, newValue);
+            } catch (Exception ex) {
                 JOptionPane.showMessageDialog(this, ex.getMessage());
             }
         });
-
         loadFile();
         setVisible(true);
     }
-
     /**
      * method: loadFile
      * parameters: none
      * return: none
-     * purpose: Loads the file into a string for it to be displayed by the GUI
+     * purpose: Selects the data from the database to be viewed in the gui.
      */
     private void loadFile() {
         try {
-            String content = Files.readString(app.menuItemFile());
-            displayArea.setText(content);
-        } catch (IOException e) {
-            JOptionPane.showMessageDialog(this, "Error loading file.");
+            StringBuilder content = new StringBuilder();
+            String sql = "SELECT * FROM menu";
+
+            try (java.sql.Statement stmt = app.getConnection().createStatement();
+                 java.sql.ResultSet rs = stmt.executeQuery(sql)) {
+                while (rs.next()) {
+                    content.append(
+                                    rs.getInt("id")).append(" / ")
+                            .append(rs.getString("description")).append(" / ")
+                            .append(rs.getInt("quantity")).append(" / ")
+                            .append(rs.getDate("date_made")).append(" / ")
+                            .append(rs.getInt("shelf_life")).append(" / ")
+                            .append(rs.getDate("expiration_date")).append(" / ")
+                            .append(rs.getString("allergens"))
+                            .append("\n");
+                }
+            }
+            displayArea.setText(content.toString());
+        } catch (Exception e) {
+            JOptionPane.showMessageDialog(this, "Error loading data.");
         }
     }
 }

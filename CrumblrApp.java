@@ -2,6 +2,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.sql.*;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
@@ -16,17 +17,22 @@ import java.util.Scanner;
  */
 public class CrumblrApp {
 
-    private Path menuItemFile;
-
-    public CrumblrApp(Path menuItemFile) {
-        this.menuItemFile = menuItemFile;
+    private Connection conn;
+    public CrumblrApp(String url, String user, String password) throws SQLException {
+        try {
+            Class.forName("com.mysql.cj.jdbc.Driver");
+        } catch (ClassNotFoundException e) {
+            throw new RuntimeException("MySQL Driver not found.");
+        }
+        this.conn = DriverManager.getConnection(url, user, password);
     }
 
     /**
      * method: addMenuItem
      * parameters: Strings from user input via GUI
-     * return: Files, String
+     * return: String
      * purpose: Validations for the new menu item being added by the user via the GUI.
+     *
      * @return
      */
     public String addMenuItem(String itemDescription, String itemQuantity, String dateMade, String shelfLife, String allergens) throws IOException {
@@ -69,96 +75,51 @@ public class CrumblrApp {
         if (allergens.isEmpty() || allergens.length() > 500) {
             throw new IllegalArgumentException("Invalid entry. The menu item's allergen list must be between 1 - 500 characters long.");
         }
+        String sql = "INSERT INTO menu (description, quantity, date_made, shelf_life, expiration_date, allergens) VALUES (?, ?, ?, ?, ?, ?)";
 
-        int id = generateID();
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setString(1, itemDescription);
+            stmt.setInt(2, quantity);
+            stmt.setDate(3, java.sql.Date.valueOf(date));
+            stmt.setInt(4, lifeDays);
+            stmt.setDate(5, java.sql.Date.valueOf(date.plusDays(lifeDays)));
+            stmt.setString(6, allergens);
 
-        String newItem = id + "/" +
-                String.join("/", itemDescription, itemQuantity, dateMade, shelfLife, expirationDate, allergens);
-
-        if (Files.exists(menuItemFile) && Files.size(menuItemFile) > 0) {
-            newItem = System.lineSeparator() + newItem;
+            stmt.executeUpdate();
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        Files.writeString(menuItemFile, newItem, StandardOpenOption.APPEND);
-
         return expirationDate;
     }
 
     /**
      * method: deleteMenuItem()
      * parameters: String for the item's id
-     * return: Files
-     * purpose: This method holds the validation and logic for taking in the menu item's
-     * id that the user would like to delete and then goes through the list to remove that string
-     * via a for loop. It them writes back into the file the new string of menu items.
+     * return: None
+     * purpose: This method runs the sql statement to delete the requested menu item from the database.
      */
     public void deleteMenuItem(String id) throws IOException {
+        String sql = "DELETE FROM menu WHERE id = ?";
 
-        String[] menuCollection = Files.readString(menuItemFile).split(System.lineSeparator());
-
-        boolean found = false;
-
-        //For loop to go through the collection and if the user input matches,
-        //replace with an empty line
-        for (int i = 0; i < menuCollection.length; i++) {
-            if (menuCollection[i].isBlank()) continue;
-            //Splitting so the user only needs to enter the description before / and not whole line.
-            String[] fields = menuCollection[i].split("/");
-            if (fields[0].equals(id)) {
-                menuCollection[i] = "";
-                found = true;
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+            stmt.setInt(1, Integer.parseInt(id));
+            int rows = stmt.executeUpdate();
+            if (rows == 0) {
+                throw new IllegalArgumentException("Menu item not found.");
             }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
-        if (!found) {
-            throw new IllegalArgumentException("Menu item not found.");
-        }
-
-        //Rebuilding the collection without the deleted entry
-        StringBuilder newCollection = new StringBuilder();
-        for (
-                String s : menuCollection) {
-            if (!s.isEmpty()) {
-                if (newCollection.length() > 0) {
-                    newCollection.append(System.lineSeparator());
-                }
-                newCollection.append(s);
-            }
-        }
-        //Writing back into the file as a single string
-        Files.writeString(menuItemFile, newCollection.toString());
     }
 
     /**
-     * method: generateID
-     * parameters: none
-     * return: int
-     * purpose: To add a unique id to each menu item entry
-     */
-    private int generateID() throws IOException {
-        if (!Files.exists(menuItemFile)) return 1;
-
-        int id = 0;
-
-        for (String line : Files.readAllLines(menuItemFile)){
-            if (line.isBlank()) continue;
-
-            String [] fields = line.split("/");
-            int itemId = Integer.parseInt(fields[0]);
-
-            if (itemId > id){
-                id = itemId;
-            }
-        }
-        return id + 1;
-    }
-
-    /**
-     * method: menuItemFile
+     * method: getConnection()
      * parameters: None
-     * return: File path
-     * purpose: To hold and return the file path
+     * return: Sql database connection
+     * purpose: This method connects to the database
      */
-    public Path menuItemFile() {
-        return menuItemFile;
+    public java.sql.Connection getConnection() {
+        return conn;
     }
 
     /**
@@ -166,110 +127,93 @@ public class CrumblrApp {
      * parameters: Strings from user input
      * return: none
      * purpose: To have the user enter the ID of the menu item they want to edit,
-     * Find that item in the list, and prompts the user on which attribute they'd
-     * like to edit. Writes back into the file.
+     * Uses sql to update the menu item in the database.
      */
     public void updateMenuItem(String id, String choice, String newValue) throws IOException {
-
         newValue = newValue.trim();
         id = id.trim();
+        String column;
 
-        String[] menuCollection = Files.readString(menuItemFile).split(System.lineSeparator());
-
-        boolean found = false;
-
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy");
-
-        for (int i = 0; i < menuCollection.length; i++) {
-            if (menuCollection[i].isBlank()) continue;
-            //Splitting so the user only needs to enter the description before / and not whole line.
-            String[] fields = menuCollection[i].split("/");
-            if (fields[0].equals(id)) {
-
-                switch (choice) {
-                    case "1": //Updating Description
-                        if (newValue.isEmpty() || newValue.length() > 30) {
-                                throw new IllegalArgumentException("Invalid entry. The menu item's description must be between 1 - 30 characters long.");
-                            }
-                        fields[1] = newValue;
-                        break;
-
-                    case "2": //Updating Quantity
-                        try {
-                            int quantity = Integer.parseInt(newValue);
-                            if (quantity < 0 || quantity > 999) {
-                                throw new IllegalArgumentException("Invalid entry. Quantity must be between 0–999.");
-                            }
-                            fields[2] = newValue;
-                        } catch (NumberFormatException e) {
-                            throw new IllegalArgumentException("Invalid entry. Quantity must be a number.");
-                        }
-                        break;
-
-                        case "3": //Updating the date made
-                            try {
-                                LocalDate.parse(newValue, formatter);
-                                fields[3] = newValue;
-                                } catch (DateTimeParseException e) {
-                                    throw new IllegalArgumentException("Invalid entry. Please use MM-DD-YYYY format.");
-                                }
-                            break;
-
-                        case "4": //Updating shelf life
-                            try {
-                                int life = Integer.parseInt(newValue);
-                                    if (life < 1 || life > 99) {
-                                        throw new IllegalArgumentException("Invalid entry. Shelf life must be between 1–99 days.");
-                                    }
-                                    fields[4] = newValue;
-                            } catch (NumberFormatException e) {
-                                throw new IllegalArgumentException("Invalid entry. Shelf life must be a number.");
-                            }
-                            break;
-
-                        case "5": //updating allergens
-                            if (newValue.isEmpty() || newValue.length() > 500) {
-                                throw new IllegalArgumentException("Invalid entry. Must be between 1–500 characters.");
-                            }
-                            fields[6] = newValue;
-                            break;
-
-                        default:
-                            throw new IllegalArgumentException("Invalid selection.");
-                    }
-
-                    //Updating the expiration date if the date made or the shelf life changes.
-                    LocalDate dateMade = LocalDate.parse(fields[3], formatter);
-                    int shelfLife = Integer.parseInt(fields[4]);
-                    fields[5] = dateMade.plusDays(shelfLife).format(formatter);
-
-                    menuCollection[i] = String.join("/", fields);
-                    found = true;
-                    break;
+        switch (choice) {
+            case "1":
+                if (newValue.isEmpty() || newValue.length() > 30) {
+                    throw new IllegalArgumentException("Invalid entry. The menu item's description must be between 1 - 30 characters long.");
                 }
-            }
-            if (!found) {
-                throw new IllegalArgumentException("Menu item not found.");
-            }
-        //Rebuilding the file
-        Files.writeString(menuItemFile, String.join(System.lineSeparator(), menuCollection));
-    }
+                column = "description";
+                break;
 
-    /**
-     * method: validateTxtFile
-     * parameters: File path
-     * return: none
-     * purpose: To validate that the file is not blank and is a .txt file
-     */
-    public static void validateTxtFile(Path filePath) {
-        if (filePath == null) {
-            throw new IllegalArgumentException("No file selected.");
+            case "2":
+                try {
+                    int q = Integer.parseInt(newValue);
+                    if (q < 0 || q > 999) throw new Exception();
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Invalid entry. Quantity must be between 0–999.");
+                }
+                column = "quantity";
+                break;
+
+            case "3":
+                try {
+                    DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy");
+                    LocalDate.parse(newValue, formatter);
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Invalid entry. Please use MM-DD-YYYY format.");
+                }
+                column = "date_made";
+                break;
+
+            case "4":
+                try {
+                    int life = Integer.parseInt(newValue);
+                    if (life < 1 || life > 99) throw new Exception();
+                } catch (Exception e) {
+                    throw new IllegalArgumentException("Invalid entry. Shelf life must be between 1–99 days.");
+                }
+                column = "shelf_life";
+                break;
+
+            case "5":
+                if (newValue.isEmpty() || newValue.length() > 500) {
+                    throw new IllegalArgumentException("Invalid entry. Must be between 1–500 characters.");
+                }
+                column = "allergens";
+                break;
+
+            default:
+                throw new IllegalArgumentException("Invalid selection.");
         }
 
-        String fileName = filePath.getFileName().toString().toLowerCase();
+        String sql = "UPDATE menu SET " + column + " = ? WHERE id = ?";
 
-        if (!fileName.endsWith(".txt")) {
-            throw new IllegalArgumentException("Invalid file type. Please select a .txt file.");
+        try (PreparedStatement stmt = conn.prepareStatement(sql)) {
+
+            if (column.equals("quantity") || column.equals("shelf_life")) {
+                stmt.setInt(1, Integer.parseInt(newValue));
+            } else if (column.equals("date_made")) {
+                DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM-dd-yyyy");
+                stmt.setDate(1, java.sql.Date.valueOf(LocalDate.parse(newValue, formatter)));
+            } else {
+                stmt.setString(1, newValue);
+            }
+
+            stmt.setInt(2, Integer.parseInt(id));
+            int rows = stmt.executeUpdate();
+            if (rows == 0) {
+                throw new IllegalArgumentException("Menu item not found.");
+            }
+
+            //Recalculate the expiration date
+            if (column.equals("date_made") || column.equals("shelf_life")) {
+                String updateExp = "UPDATE menu " +
+                        "SET expiration_date = DATE_ADD(date_made, INTERVAL shelf_life DAY) " +
+                        "WHERE id = ?";
+                try (PreparedStatement expStmt = conn.prepareStatement(updateExp)) {
+                    expStmt.setInt(1, Integer.parseInt(id));
+                    expStmt.executeUpdate();
+                }
+            }
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
     }
 }
