@@ -45,7 +45,7 @@ public class GUI extends JFrame {
             e.printStackTrace();
         }
 
-        JTextField urlField = new JTextField("jdbc:mysql://localhost:3306/Crumblr");
+        JTextField urlField = new JTextField();
         JTextField userField = new JTextField();
         JPasswordField passField = new JPasswordField();
 
