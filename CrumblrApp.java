@@ -18,6 +18,15 @@ import java.util.Scanner;
 public class CrumblrApp {
 
     private Connection conn;
+
+    /**
+     * Establishes a connection to the MySQL database.
+     *
+     * @param url database URL
+     * @param user database username
+     * @param password database password
+     * @throws SQLException if a database access error occurs
+     */
     public CrumblrApp(String url, String user, String password) throws SQLException {
         try {
             Class.forName("com.mysql.cj.jdbc.Driver");
@@ -28,12 +37,16 @@ public class CrumblrApp {
     }
 
     /**
-     * method: addMenuItem
-     * parameters: Strings from user input via GUI
-     * return: String
-     * purpose: Validations for the new menu item being added by the user via the GUI.
+     * Validates input and inserts a new menu item into the database.
      *
-     * @return
+     * @param itemDescription description of the item (1–30 characters)
+     * @param itemQuantity quantity (0–999)
+     * @param dateMade date the item was made (MM-dd-yyyy)
+     * @param shelfLife shelf life (in days) (1–99)
+     * @param allergens description of any known allergens (1–500 characters)
+     * @return calculated expiration date
+     * @throws IllegalArgumentException if any input is invalid
+     * @throws IOException if an input/output error occurs
      */
     public String addMenuItem(String itemDescription, String itemQuantity, String dateMade, String shelfLife, String allergens) throws IOException {
         if (itemDescription.isEmpty() || itemDescription.length() > 30) {
@@ -93,10 +106,11 @@ public class CrumblrApp {
     }
 
     /**
-     * method: deleteMenuItem()
-     * parameters: String for the item's id
-     * return: None
-     * purpose: This method runs the sql statement to delete the requested menu item from the database.
+     * Deletes a menu item from the database by ID.
+     *
+     * @param id the ID of the menu item
+     * @throws IllegalArgumentException if the item is not found or ID is invalid
+     * @throws IOException if an input/output error occurs
      */
     public void deleteMenuItem(String id) throws IOException {
         String sql = "DELETE FROM menu WHERE id = ?";
@@ -113,21 +127,23 @@ public class CrumblrApp {
     }
 
     /**
-     * method: getConnection()
-     * parameters: None
-     * return: Sql database connection
-     * purpose: This method connects to the database
+     * Returns the active database connection.
+     *
+     * @return the SQL connection
      */
     public java.sql.Connection getConnection() {
         return conn;
     }
 
     /**
-     * method: updateMenuItem
-     * parameters: Strings from user input
-     * return: none
-     * purpose: To have the user enter the ID of the menu item they want to edit,
-     * Uses sql to update the menu item in the database.
+     * Updates a menu item.
+     * Automatically recalculates expiration date if needed.
+     *
+     * @param id menu item ID
+     * @param choice field to update (1–5)
+     * @param newValue new value for the field
+     * @throws IllegalArgumentException if input is invalid or item not found
+     * @throws IOException if an input/output error occurs
      */
     public void updateMenuItem(String id, String choice, String newValue) throws IOException {
         newValue = newValue.trim();

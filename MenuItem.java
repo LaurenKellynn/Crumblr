@@ -16,6 +16,16 @@ public class MenuItem {
     private LocalDate expirationDate;
     private String allergens;
 
+    /**
+     * Constructs a MenuItem with all required attributes.
+     *
+     * @param description description of the item
+     * @param quantity quantity available
+     * @param dateMade date the item was made
+     * @param shelfLife shelf life (in days)
+     * @param expirationDate calculated expiration date
+     * @param allergens known allergen information
+     */
     public MenuItem(String description, int quantity, LocalDate dateMade, int shelfLife, LocalDate expirationDate, String allergens) {
         this.description = description;
         this.quantity = quantity;
@@ -25,10 +35,21 @@ public class MenuItem {
         this.allergens = allergens;
     }
 
+    /**
+     * Returns the description of the menu item.
+     *
+     * @return item description
+     */
     public String getDescription(){
         return description;
     }
 
+    /**
+     * Converts the menu item into a formatted string for file storage.
+     * Fields are separated by "/"
+     *
+     * @return formatted string representation of the menu item
+     */
     public String toFileString(){
         return description + "/" + quantity + "/" + dateMade + "/" + shelfLife + "/" + expirationDate + "/" + allergens;
     }

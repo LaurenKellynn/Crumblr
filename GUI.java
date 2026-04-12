@@ -21,6 +21,9 @@ public class GUI extends JFrame {
     private JTextArea displayArea;
     private ImageIcon icon;
 
+    /**
+     * Constructs the GUI, initializes components, and establishes database connection.
+     */
     public GUI () {
 
         setTitle("Crumblr");
@@ -282,10 +285,8 @@ public class GUI extends JFrame {
         setVisible(true);
     }
     /**
-     * method: loadFile
-     * parameters: none
-     * return: none
-     * purpose: Selects the data from the database to be viewed in the gui.
+     * Retrieves all menu items from the database
+     * and displays them in the text area.
      */
     private void loadFile() {
         try {
